@@ -111,19 +111,46 @@ async function startWhatsApp() {
                 console.log(`Received: "${text}" from ${name} (${phone}). Forwarding...`);
                 
                 try {
-                    const res = await fetch(BACKEND_URL, {
+                    let res = await fetch(BACKEND_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ phone, name, text })
                     });
                     
+                    if (!res.ok && BACKEND_URL.includes('localhost')) {
+                        console.log("Local backend returned error, trying production backend fallback...");
+                        res = await fetch('https://parabolica-api-nw9v.onrender.com/whatsapp/webhook', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone, name, text })
+                        });
+                    }
+
                     if (res.ok) {
                         console.log("Forwarded to Python backend successfully.");
                     } else {
                         console.error(`Python API returned: ${res.status}`);
                     }
                 } catch (err) {
-                    console.error(`Failed forwarding to backend: ${err.message}`);
+                    if (BACKEND_URL.includes('localhost')) {
+                        console.log("Local backend offline, trying production backend fallback...");
+                        try {
+                            const prodRes = await fetch('https://parabolica-api-nw9v.onrender.com/whatsapp/webhook', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ phone, name, text })
+                            });
+                            if (prodRes.ok) {
+                                console.log("Forwarded to production Python backend successfully.");
+                            } else {
+                                console.error(`Production API returned: ${prodRes.status}`);
+                            }
+                        } catch (prodErr) {
+                            console.error(`Failed forwarding to production backend: ${prodErr.message}`);
+                        }
+                    } else {
+                        console.error(`Failed forwarding to backend: ${err.message}`);
+                    }
                 }
             }
         }
